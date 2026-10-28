@@ -26,47 +26,129 @@ export function makeCode() {
   return s;
 }
 
-export function hasNet() { return !!(window.mqtt && window.mqtt.connect); }
+export function hasNet() { return typeof WebSocket === 'function'; }
+
+// ---- 최소 MQTT 3.1.1 클라이언트 (WebSocket, QoS 0) ----
+// 외부 라이브러리 없이 CONNECT / SUBSCRIBE / PUBLISH / PING 만 구현한다.
+const te = new TextEncoder();
+const td = new TextDecoder();
+
+function cat(parts) {
+  let n = 0;
+  for (const p of parts) n += p.length;
+  const out = new Uint8Array(n);
+  let o = 0;
+  for (const p of parts) { out.set(p, o); o += p.length; }
+  return out;
+}
+const u8 = (...b) => new Uint8Array(b);
+const mstr = (s) => { const b = te.encode(s); return cat([u8(b.length >> 8, b.length & 255), b]); };
+
+function packet(head, body) {
+  const len = [];
+  let x = body.length;
+  do { let d = x % 128; x = Math.floor(x / 128); if (x > 0) d |= 128; len.push(d); } while (x > 0);
+  return cat([u8(head, ...len), body]);
+}
+
+function mqttClient(url, topic, { onUp, onDown, onMessage }) {
+  let ws = null;
+  let up = false;
+  let closed = false;
+  let back = 2000;
+  let pingT = null;
+  let buf = new Uint8Array(0);
+  const clientId = 'jd_' + rid(12);
+
+  const send = (bytes) => { if (ws && ws.readyState === 1) try { ws.send(bytes); } catch (e) {} };
+
+  const down = () => {
+    clearInterval(pingT);
+    if (up) { up = false; onDown(); }
+    if (!closed) { setTimeout(open, back); back = Math.min(back * 2, 20000); }
+  };
+
+  function handle(type, flags, body) {
+    if (type === 2) { // CONNACK
+      if (body[1] !== 0) { try { ws.close(); } catch (e) {} return; }
+      back = 2000;
+      send(packet(0x82, cat([u8(0, 1), mstr(topic), u8(0)]))); // SUBSCRIBE
+      pingT = setInterval(() => send(u8(0xc0, 0)), 25000);
+      if (!up) { up = true; onUp(); }
+    } else if (type === 3) { // PUBLISH
+      const tl = (body[0] << 8) | body[1];
+      let o = 2 + tl;
+      if ((flags >> 1) & 3) o += 2;
+      onMessage(body.subarray(o));
+    }
+  }
+
+  function feed(chunk) {
+    buf = buf.length ? cat([buf, chunk]) : chunk;
+    for (;;) {
+      if (buf.length < 2) return;
+      let mul = 1, len = 0, i = 1, b;
+      do {
+        if (i >= buf.length) return;
+        b = buf[i++];
+        len += (b & 127) * mul;
+        mul *= 128;
+      } while (b & 128);
+      if (buf.length < i + len) return;
+      handle(buf[0] >> 4, buf[0] & 15, buf.subarray(i, i + len));
+      buf = buf.subarray(i + len);
+    }
+  }
+
+  function open() {
+    if (closed) return;
+    buf = new Uint8Array(0);
+    try {
+      ws = new WebSocket(url, ['mqtt']);
+    } catch (e) { return down(); }
+    ws.binaryType = 'arraybuffer';
+    const t = setTimeout(() => { try { ws.close(); } catch (e) {} }, 9000);
+    ws.onopen = () => {
+      clearTimeout(t);
+      // CONNECT: "MQTT", level 4, clean session, keepalive 60s
+      send(packet(0x10, cat([mstr('MQTT'), u8(4, 2, 0, 60), mstr(clientId)])));
+    };
+    ws.onmessage = (e) => feed(new Uint8Array(e.data));
+    ws.onclose = () => { clearTimeout(t); down(); };
+    ws.onerror = () => {};
+  }
+  open();
+
+  return {
+    get up() { return up; },
+    publish(t, str) { if (up) send(packet(0x30, cat([mstr(t), te.encode(str)]))); },
+    end() {
+      closed = true;
+      clearInterval(pingT);
+      if (ws) { send(u8(0xe0, 0)); try { ws.close(); } catch (e) {} }
+    },
+  };
+}
 
 // 여러 브로커에 붙어서 하나처럼 쓰는 묶음
 function bus(subTopic, onMsg, onStatus) {
-  const clients = [];
   let up = 0;
-  for (const url of brokers()) {
-    let c;
-    try {
-      c = window.mqtt.connect(url, {
-        clientId: 'jd_' + rid(12),
-        clean: true,
-        keepalive: 30,
-        connectTimeout: 9000,
-        reconnectPeriod: 3000,
-        protocolVersion: 4,
-      });
-    } catch (e) { continue; }
-    c._up = false;
-    c.on('connect', () => {
-      c.subscribe(subTopic, { qos: 0 });
-      if (!c._up) { c._up = true; up++; onStatus(up); }
-    });
-    const down = () => { if (c._up) { c._up = false; up--; onStatus(up); } };
-    c.on('close', down);
-    c.on('offline', down);
-    c.on('error', () => {});
-    c.on('message', (t, buf) => {
+  const clients = brokers().map((url) => mqttClient(url, subTopic, {
+    onUp: () => onStatus(++up),
+    onDown: () => onStatus(--up),
+    onMessage: (bytes) => {
       let env;
-      try { env = JSON.parse(new TextDecoder().decode(buf)); } catch (e) { return; }
+      try { env = JSON.parse(td.decode(bytes)); } catch (e) { return; }
       if (env && typeof env === 'object') onMsg(env);
-    });
-    clients.push(c);
-  }
+    },
+  }));
   return {
     publish(topic, obj) {
       const s = JSON.stringify(obj);
-      for (const c of clients) if (c._up) c.publish(topic, s, { qos: 0 });
+      for (const c of clients) c.publish(topic, s);
     },
     get up() { return up; },
-    end() { for (const c of clients) try { c.end(true); } catch (e) {} },
+    end() { for (const c of clients) c.end(); },
   };
 }
 
