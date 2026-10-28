@@ -1,4 +1,4 @@
-import { h, esc, pad, nodeOf } from './common.js';
+import { h, esc, pad, nodeOf, pips } from './common.js';
 
 const HOLD = 6000;
 const MIN_HOLD = 700;
@@ -85,7 +85,8 @@ export const bomb = {
       this.ring.innerHTML = ids.map((id, i) => {
         const p = this.api.player(id);
         const a = (i / n) * Math.PI * 2 - Math.PI / 2;
-        return `<div class="bm-seat" data-pid="${esc(id)}" style="left:${50 + Math.cos(a) * 42}%;top:${50 + Math.sin(a) * 42}%"><b>${pad(p.num)}</b><span>${esc(p.name)}</span></div>`;
+        const life = this.api.lives > 1 ? `<span class="pips">${pips(this.api.lives, p.deaths || 0)}</span>` : '';
+        return `<div class="bm-seat" data-pid="${esc(id)}" style="left:${50 + Math.cos(a) * 42}%;top:${50 + Math.sin(a) * 42}%"><b>${pad(p.num)}</b><span>${esc(p.name)}</span>${life}</div>`;
       }).join('');
     }
 

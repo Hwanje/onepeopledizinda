@@ -12,7 +12,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Mono:wght@400;600&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=4">
+<link rel="stylesheet" href="css/style.css?v=5">
 </head>
 <body>
 <header id="hud">
@@ -148,7 +148,7 @@
       <div class="stage" id="p-stage"></div>
       <div class="turnbar" id="p-turn"></div>
       <div class="grave">
-        <span class="eyebrow">탈락</span>
+        <span class="eyebrow">탈락 <b id="p-out"></b></span>
         <div class="grave-list" id="p-grave"></div>
       </div>
       <div class="host-only play-host">
@@ -187,31 +187,32 @@
     <p class="death-num" id="death-num">000</p>
     <p class="death-name" id="death-name"></p>
     <p class="death-cause" id="death-cause"></p>
+    <p class="death-life" id="death-life"></p>
   </div>
 </div>
 <div id="grain"></div>
 <div id="vignette"></div>
 <div id="gate"><button class="btn btn-blood btn-big" id="gate-btn">입장</button><p class="muted small">소리가 납니다. 이어폰을 권장합니다.</p></div>
 
-<script src="vendor/qrcode.js?v=4"></script>
+<script src="vendor/qrcode.js?v=5"></script>
 <!-- 배포할 때마다 v 값을 올리면 브라우저 캐시에 옛 파일이 섞이지 않는다 -->
 <script type="importmap">
 {
  "imports": {
-  "./js/audio.js": "./js/audio.js?v=4",
-  "./js/fx.js": "./js/fx.js?v=4",
-  "./js/net.js": "./js/net.js?v=4",
-  "./js/engine.js": "./js/engine.js?v=4",
-  "./js/games/index.js": "./js/games/index.js?v=4",
-  "./js/games/common.js": "./js/games/common.js?v=4",
-  "./js/games/roulette.js": "./js/games/roulette.js?v=4",
-  "./js/games/bridge.js": "./js/games/bridge.js?v=4",
-  "./js/games/bomb.js": "./js/games/bomb.js?v=4",
-  "./js/games/poison.js": "./js/games/poison.js?v=4",
-  "./js/games/wheel.js": "./js/games/wheel.js?v=4"
+  "./js/audio.js": "./js/audio.js?v=5",
+  "./js/fx.js": "./js/fx.js?v=5",
+  "./js/net.js": "./js/net.js?v=5",
+  "./js/engine.js": "./js/engine.js?v=5",
+  "./js/games/index.js": "./js/games/index.js?v=5",
+  "./js/games/common.js": "./js/games/common.js?v=5",
+  "./js/games/roulette.js": "./js/games/roulette.js?v=5",
+  "./js/games/bridge.js": "./js/games/bridge.js?v=5",
+  "./js/games/bomb.js": "./js/games/bomb.js?v=5",
+  "./js/games/poison.js": "./js/games/poison.js?v=5",
+  "./js/games/wheel.js": "./js/games/wheel.js?v=5"
  }
 }
 </script>
-<script type="module" src="./js/app.js?v=4"></script>
+<script type="module" src="./js/app.js?v=5"></script>
 </body>
 </html>

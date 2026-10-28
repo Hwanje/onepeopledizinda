@@ -3,7 +3,7 @@ import * as fx from './fx.js';
 import { hostRoom, joinRoom, makeCode, hasNet } from './net.js';
 import { Engine } from './engine.js';
 import { GAMES, GAME_IDS } from './games/index.js';
-import { esc, pad } from './games/common.js';
+import { esc, pad, pips } from './games/common.js';
 
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
@@ -85,11 +85,13 @@ function shareLink(code) {
 
 // ---------- 규칙 설정 폼 (개설 화면과 대기실 공용) ----------
 function settingsForm(root, values, onChange, editable = true) {
-  const v = { ...values };
+  const v = { lives: 1, ...values };
+  let livesN = v.lives > 1 ? v.lives : 3; // 목숨제로 다시 바꿀 때 쓸 값
   if (!editable) {
     const names = v.games.map((g) => GAMES[g].name).join(', ');
     root.innerHTML = `
       <dl class="rules-ro">
+        <div><dt>진행 방식</dt><dd>${v.lives > 1 ? `목숨제 · ${v.lives}번 죽으면 탈락` : '단판 · 한 번 죽으면 탈락'}</dd></div>
         <div><dt>정원</dt><dd>${v.maxPlayers}명</dd></div>
         <div><dt>탈락자</dt><dd>${v.elimCount}명</dd></div>
         <div><dt>당첨(생존)</dt><dd>${Math.max(0, (A.S ? A.S.players.length : v.maxPlayers) - v.elimCount)}명</dd></div>
@@ -100,6 +102,17 @@ function settingsForm(root, values, onChange, editable = true) {
     return;
   }
   root.innerHTML = `
+    <div class="field">
+      <span>진행 방식</span>
+      <div class="seg" data-k="mode">
+        <button type="button" data-v="single">단판 · 한 번 죽으면 탈락</button>
+        <button type="button" data-v="lives">목숨제 · 여러 번</button>
+      </div>
+    </div>
+    <div class="num-field lives-field">
+      <span>탈락 기준 죽음 횟수</span>
+      <div class="stepper" data-k="lives"><button type="button" data-d="-1">−</button><input type="number" inputmode="numeric" min="2" max="9"><button type="button" data-d="1">+</button></div>
+    </div>
     <div class="nums">
       <div class="num-field">
         <span>참여자 수</span>
@@ -138,20 +151,27 @@ function settingsForm(root, values, onChange, editable = true) {
     v.elimCount = Math.min(Math.max(1, total - 1), Math.max(1, v.elimCount | 0));
     root.querySelector('[data-k=maxPlayers] input').value = v.maxPlayers;
     root.querySelector('[data-k=elimCount] input').value = v.elimCount;
+    if (v.lives > 1) { v.lives = Math.min(9, Math.max(2, v.lives | 0)); livesN = v.lives; }
+    root.querySelector('[data-k=lives] input').value = v.lives > 1 ? v.lives : livesN;
+    root.querySelector('.lives-field').classList.toggle('hidden', v.lives <= 1);
+    root.querySelectorAll('[data-k=mode] button').forEach((b) => b.classList.toggle('on', (b.dataset.v === 'lives') === (v.lives > 1)));
     root.querySelectorAll('[data-k=pickMode] button').forEach((b) => b.classList.toggle('on', b.dataset.v === v.pickMode));
     root.querySelectorAll('[data-k=timeout] button').forEach((b) => b.classList.toggle('on', Number(b.dataset.v) === v.timeout));
     root.querySelectorAll('.gamelist input').forEach((c) => (c.checked = v.games.includes(c.value)));
     const live = A.S && A.S.players.length ? `현재 ${A.S.players.length}명 기준 ` : '';
-    root.querySelector('[data-calc]').innerHTML = `${live}<b>${v.elimCount}명</b>이 죽고 <b>${Math.max(0, total - v.elimCount)}명</b>이 살아남는다.`;
+    const rule = v.lives > 1 ? `각자 <b>${v.lives}번</b> 죽으면 탈락. ` : '';
+    root.querySelector('[data-calc]').innerHTML = `${rule}${live}<b>${v.elimCount}명</b>이 탈락하면 끝나고 <b>${Math.max(0, total - v.elimCount)}명</b>이 살아남는다.`;
   };
   const commit = () => { sync(); onChange({ ...v }); };
 
   root.querySelectorAll('.stepper').forEach((st) => {
     const k = st.dataset.k;
-    st.querySelectorAll('button').forEach((b) => (b.onclick = () => { sfx.ui(); v[k] = (v[k] | 0) + Number(b.dataset.d); commit(); }));
-    st.querySelector('input').onchange = (e) => { v[k] = Number(e.target.value) || 0; commit(); };
+    const fix = () => { if (k === 'lives') v.lives = Math.max(2, v.lives | 0); };
+    st.querySelectorAll('button').forEach((b) => (b.onclick = () => { sfx.ui(); v[k] = (v[k] | 0) + Number(b.dataset.d); fix(); commit(); }));
+    st.querySelector('input').onchange = (e) => { v[k] = Number(e.target.value) || 0; fix(); commit(); };
   });
   root.querySelectorAll('[data-k=pickMode] button').forEach((b) => (b.onclick = () => { sfx.ui(); v.pickMode = b.dataset.v; commit(); }));
+  root.querySelectorAll('[data-k=mode] button').forEach((b) => (b.onclick = () => { sfx.ui(); v.lives = b.dataset.v === 'lives' ? livesN : 1; commit(); }));
   root.querySelectorAll('[data-k=timeout] button').forEach((b) => (b.onclick = () => { sfx.ui(); v.timeout = Number(b.dataset.v); commit(); }));
   root.querySelectorAll('.gamelist input').forEach((c) => (c.onchange = () => {
     sfx.ui();
@@ -204,7 +224,12 @@ function startHost(cfg, saved = null) {
     E.manualN = saved.manualN || 0;
     E.usedNums = new Set(saved.nums || []);
     E.gid = saved.gid || 0;
-    for (const p of E.S.players) if (!p.manual && !p.host) p.online = false;
+    for (const p of E.S.players) {
+      if (!p.manual && !p.host) p.online = false;
+      p.deaths = p.deaths || (p.alive ? 0 : 1);
+      p.log = p.log || [];
+    }
+    E.S.lives = E.S.lives || 1;
     E.S.turn = null;
     E.S.pick = null;
   } else if (cfg.hostName !== null) {
@@ -311,6 +336,7 @@ const api = {
   get me() { return A.me; },
   get isHost() { return A.role === 'host'; },
   player,
+  get lives() { return (A.S && A.S.lives) || 1; },
   canAct(kind) {
     const t = A.S && A.S.turn;
     if (!t || t.kind !== kind) return false;
@@ -371,7 +397,7 @@ function renderLobby() {
   const S = A.S;
   const host = A.role === 'host';
   $('#l-title').textContent = S.title;
-  $('#l-summary').textContent = `${S.players.length}명 입장 · 정원 ${S.maxPlayers}명 · 탈락 ${S.elimCount}명`;
+  $('#l-summary').textContent = `${S.players.length}명 입장 · 정원 ${S.maxPlayers}명 · 탈락 ${S.elimCount}명${S.lives > 1 ? ` · ${S.lives}번 죽으면 탈락` : ''}`;
   $('#l-code').textContent = S.code;
   const link = shareLink(S.code);
   if ($('#l-link').value !== link) {
@@ -410,7 +436,7 @@ function renderLobby() {
     }));
   }
 
-  const cfg = { maxPlayers: S.maxPlayers, elimCount: S.elimCount, pickMode: S.pickMode, games: S.games, timeout: S.timeout };
+  const cfg = { maxPlayers: S.maxPlayers, elimCount: S.elimCount, lives: S.lives, pickMode: S.pickMode, games: S.games, timeout: S.timeout };
   const key = (host ? 'h' : 'g') + JSON.stringify(cfg) + S.players.length;
   if (key !== lobbyFormKey) {
     lobbyFormKey = key;
@@ -430,7 +456,8 @@ function renderLobby() {
 function renderPlay(prev) {
   const S = A.S;
   $('#p-round').textContent = S.round;
-  $('#p-total').textContent = `/${S.elimCount}`;
+  $('#p-total').textContent = S.lives > 1 ? '' : `/${S.elimCount}`;
+  $('#p-out').textContent = `${S.players.filter((p) => !p.alive).length} / ${S.elimCount}`;
   const alive = S.players.filter((p) => p.alive).length;
   $('#p-alive').textContent = alive;
   const cap = $('#p-caption');
@@ -577,9 +604,10 @@ function renderEnd() {
   const alive = S.players.filter((p) => p.alive);
   const dead = S.players.filter((p) => !p.alive).sort((a, b) => a.diedRound - b.diedRound);
   $('#e-sub').textContent = `${S.players.length}명 중 ${alive.length}명이 살아남았습니다.`;
-  const wh = alive.map((p) => `<div class="winner ${p.id === A.me ? 'me' : ''}"><span class="w-num">${pad(p.num)}</span><span class="w-name">${esc(p.name)}</span><span class="w-stamp">당첨</span></div>`).join('');
+  const multi = S.lives > 1;
+  const wh = alive.map((p) => `<div class="winner ${p.id === A.me ? 'me' : ''}"><span class="w-num">${pad(p.num)}</span><span class="w-name">${esc(p.name)}</span>${multi ? `<span class="w-life"><span class="pips">${pips(S.lives, p.deaths)}</span>${p.deaths ? `${p.deaths}번 죽고 살아남음` : '한 번도 죽지 않음'}</span>` : ''}<span class="w-stamp">당첨</span></div>`).join('');
   if ($('#e-winners')._h !== wh) { $('#e-winners').innerHTML = wh; $('#e-winners')._h = wh; }
-  $('#e-dead').innerHTML = dead.map((p) => `<li><b>R${p.diedRound}</b><span>${pad(p.num)} ${esc(p.name)}</span><i>${esc(p.cause || '')}</i></li>`).join('');
+  $('#e-dead').innerHTML = dead.map((p) => `<li><b>R${p.diedRound}</b><span>${pad(p.num)} ${esc(p.name)}</span><i>${multi ? `${esc((p.log || []).map((x) => `R${x.round} ${x.cause.split(' · ')[0]}`).join(' → '))}` : esc(p.cause || '')}</i></li>`).join('');
 }
 
 // ---------- 이벤트 ----------
@@ -596,19 +624,26 @@ function banner(k, t, s, ms = 2600) {
   b._t = setTimeout(() => b.classList.remove('on'), ms);
 }
 
-function deathScene(id, cause) {
+function deathScene({ id, cause, deaths = 1, lives = 1, out = true }) {
   const p = player(id);
   if (!p) return;
   const mine = id === A.me;
   const d = $('#death');
-  $('#death-k').textContent = mine ? '당신은 탈락했습니다' : '탈락';
+  const left = lives - deaths;
+  if (out) $('#death-k').textContent = mine ? '당신은 탈락했습니다' : '탈락';
+  else $('#death-k').textContent = mine ? '당신은 죽었습니다' : '사망';
   $('#death-num').textContent = pad(p.num);
   $('#death-name').textContent = p.name;
   $('#death-cause').textContent = cause || '';
-  d.classList.remove('on', 'mine');
+  const lifeEl = $('#death-life');
+  if (lives > 1) {
+    lifeEl.innerHTML = `<span class="pips">${pips(lives, deaths)}</span>${out ? `${lives}번째 죽음 · 탈락` : `남은 목숨 ${left} · 다음 라운드에 되살아난다`}`;
+  } else lifeEl.innerHTML = '';
+  d.classList.remove('on', 'mine', 'revive');
   void d.offsetWidth;
   d.classList.add('on');
   d.classList.toggle('mine', mine);
+  d.classList.toggle('revive', !out);
   fx.flash('#a3000f', 260);
   fx.shake(1.6, 800);
   fx.glitch(900);
@@ -616,7 +651,7 @@ function deathScene(id, cause) {
   setTimeout(() => sfx.thud(), 120);
   for (let i = 0; i < 3; i++) setTimeout(() => fx.blood(innerWidth * (0.2 + Math.random() * 0.6), innerHeight * (0.2 + Math.random() * 0.6), 0.8 + Math.random() * 0.7), i * 180);
   if (mine && navigator.vibrate) navigator.vibrate([300, 100, 600]);
-  setTimeout(() => voice.say(`${p.num}번. ${p.name}. 탈락.`), 700);
+  setTimeout(() => voice.say(out ? `${p.num}번. ${p.name}. 탈락.` : `${p.num}번. ${p.name}. 사망. 남은 목숨 ${left}.`), 700);
   clearTimeout(d._t);
   d._t = setTimeout(() => d.classList.remove('on'), 4700);
 }
@@ -634,8 +669,13 @@ function onEvent(ev) {
       sfx.stinger();
       sfx.alarm();
       fx.glitch(600);
-      banner(`ROUND ${d.round} / ${d.total}`, `${ordinal(d.round)} 탈락자`, `남은 인원 ${d.alive}명. 이번 라운드에 반드시 한 명이 죽는다.`, 2900);
-      voice.say(`${ordinal(d.round)} 탈락자를 선정합니다.`);
+      if (d.lives > 1) {
+        banner(`ROUND ${d.round} · 탈락 ${d.out} / ${d.total}`, `${d.round}라운드`, `남은 인원 ${d.alive}명. 이번 라운드에 반드시 한 명이 죽는다. ${d.lives}번 죽으면 끝이다.`, 2900);
+        voice.say(`${d.round}라운드를 시작합니다.`);
+      } else {
+        banner(`ROUND ${d.round} / ${d.total}`, `${ordinal(d.round)} 탈락자`, `남은 인원 ${d.alive}명. 이번 라운드에 반드시 한 명이 죽는다.`, 2900);
+        voice.say(`${ordinal(d.round)} 탈락자를 선정합니다.`);
+      }
       break;
     case 'pickroll':
       setTimeout(() => rollReel(d.options, d.chosen), 30);
@@ -645,7 +685,7 @@ function onEvent(ev) {
       break;
     case 'death':
       heartLoop(0);
-      deathScene(d.id, d.cause);
+      deathScene(d);
       break;
     case 'end':
       heartLoop(0);
@@ -720,6 +760,7 @@ function route() {
     createForm = settingsForm($('#c-settings'), {
       maxPlayers: last.maxPlayers || 8,
       elimCount: last.elimCount || 3,
+      lives: last.lives || 1,
       pickMode: last.pickMode || 'random',
       games: (last.games || GAME_IDS).filter((g) => GAMES[g]),
       timeout: last.timeout || 15,

@@ -150,6 +150,13 @@ body.glitching #app { animation: bigGlitch .12s steps(2) infinite; }
 
 .nums { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .num-field { min-width: 0; }
+.lives-field { margin: 0 0 18px; }
+.lives-field .stepper { max-width: 220px; }
+
+/* 목숨 */
+.pips { display: inline-flex; gap: 3px; align-items: center; }
+.pip { width: 8px; height: 8px; border: 1px solid var(--blood); transform: rotate(45deg); display: inline-block; }
+.pip.on { background: var(--blood-hi); border-color: var(--blood-hi); box-shadow: 0 0 6px rgba(255, 36, 54, .5); }
 .stepper { display: flex; border: 1px solid var(--line2); background: var(--bg); }
 .stepper button { width: 46px; background: none; border: none; font-size: 22px; cursor: pointer; color: var(--dim); }
 .stepper button:hover { color: var(--bone); background: var(--bg3); }
@@ -254,6 +261,7 @@ body.is-host .guest-only { display: none !important; }
 .tb-sec { font-family: var(--f-mono); width: 2ch; text-align: right; font-weight: 600; }
 .turnbar.urgent .tb-sec { color: var(--blood-hi); }
 
+.grave .eyebrow b { color: var(--bone); font-weight: 600; margin-left: 4px; }
 .grave { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding-top: 10px; border-top: 1px solid var(--line); }
 .grave-list { display: flex; gap: 6px; flex-wrap: wrap; }
 .play-host { display: flex; justify-content: flex-end; }
@@ -337,6 +345,7 @@ body.is-host .guest-only { display: none !important; }
 .bm-ring { position: absolute; inset: 0; border-radius: 50%; border: 1px dashed var(--line2); }
 .bm-seat { position: absolute; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; padding: 6px 8px; background: var(--bg2); border: 1px solid var(--line2); min-width: 64px; max-width: 96px; transition: all .2s; }
 .bm-seat b { font-family: var(--f-mono); font-size: 15px; }
+.bm-seat .pips { margin-top: 4px; overflow: visible; padding: 2px; }
 .bm-seat span { font-size: 12px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bm-seat.has { border-color: var(--blood); background: rgba(193, 18, 31, .25); box-shadow: 0 0 24px rgba(193, 18, 31, .5); }
 .bm-seat.is-me { box-shadow: inset 0 -2px 0 var(--gold); }
@@ -406,6 +415,7 @@ body.is-host .guest-only { display: none !important; }
 .winner.me { border-color: var(--gold); box-shadow: 0 0 40px rgba(255, 207, 112, .25); }
 .w-num { display: block; font-family: var(--f-mono); font-size: 42px; font-weight: 600; line-height: 1; }
 .w-name { display: block; font-family: var(--f-display); font-size: 22px; margin-top: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.w-life { display: flex; flex-direction: column; align-items: center; gap: 6px; margin-top: 10px; font-size: 12px; color: var(--dim); }
 .w-stamp { position: absolute; top: -14px; right: -12px; transform: rotate(12deg); background: var(--blood); color: #fff; font-family: var(--f-display); padding: 2px 10px; font-size: 18px; border: 2px solid #fff; animation: stamp .5s cubic-bezier(.2, 2, .4, 1) .8s backwards; }
 @keyframes stamp { from { transform: rotate(12deg) scale(3); opacity: 0; } }
 .dead-log { list-style: none; padding: 0; margin: 0 auto; max-width: 560px; text-align: left; }
@@ -469,6 +479,12 @@ body.me-dead #hud::after { content: '관전 중 · 당신은 이미 죽었습니
 @keyframes slash { to { transform: rotate(-8deg) scaleX(1); } }
 .death-name { font-family: var(--f-display); font-size: clamp(30px, 7vw, 60px); margin: 8px 0 0; }
 .death-cause { font-family: var(--f-mono); color: var(--dim); letter-spacing: .1em; margin: 10px 0 0; }
+.death-life { display: flex; gap: 12px; align-items: center; justify-content: center; margin: 14px 0 0; font-weight: 700; color: var(--bone); }
+.death-life:empty { display: none; }
+.death-life .pip { width: 14px; height: 14px; }
+#death.revive .death-k { color: var(--gold); }
+#death.revive .death-life { color: var(--gold); }
+#death.revive .death-num::after { background: var(--gold); height: .06em; }
 
 /* 입장 게이트 */
 #gate { position: fixed; inset: 0; z-index: 60; background: #050505; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; transition: opacity .6s; }
