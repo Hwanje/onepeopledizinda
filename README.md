@@ -33,6 +33,8 @@
 
 빌드 과정은 없다. `index.html`이 진입점이다.
 
+코드를 고쳐 배포할 때는 `index.html` 아래쪽 import map과 css/qrcode 주소의 `?v=` 숫자를 함께 올린다. 그래야 방장과 참가자 브라우저에 옛 파일이 캐시로 남지 않는다.
+
 ## 로컬 실행
 
 ES 모듈을 쓰므로 `file://`로는 열리지 않는다. 아무 정적 서버나 띄우면 된다.
@@ -58,11 +60,11 @@ css/style.css
 js/
   app.js        화면, 라우팅, 방장/참가자 연결
   engine.js     방장 전용 진행 엔진 (라운드, 차례, 탈락)
-  net.js        MQTT 다중 브로커 통신
+  net.js        MQTT 다중 브로커 통신 (자체 구현, 외부 라이브러리 없음)
   audio.js      효과음 합성
   fx.js         섬광, 흔들림, 피, 파편
   games/        게임별 진행 로직(run)과 화면(View)
-vendor/         MQTT.js, QR 생성기
+vendor/         QR 생성기
 ```
 
 ### 게임 추가하기
