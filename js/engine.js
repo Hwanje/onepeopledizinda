@@ -24,6 +24,7 @@ export class Engine {
       title: cfg.title,
       maxPlayers: cfg.maxPlayers,
       elimCount: cfg.elimCount,
+      lives: Math.max(1, cfg.lives | 0 || 1), // 이 횟수만큼 죽으면 탈락. 1이면 단판
       pickMode: cfg.pickMode,
       games: cfg.games,
       timeout: cfg.timeout,
@@ -79,7 +80,7 @@ export class Engine {
       return ex;
     }
     if (S.phase !== 'lobby' || S.players.length >= S.maxPlayers) return null;
-    const p = { id, name: this.cleanName(name), num: this.num(), alive: true, online: true, manual, host, cause: null, diedRound: 0 };
+    const p = { id, name: this.cleanName(name), num: this.num(), alive: true, online: true, manual, host, cause: null, diedRound: 0, deaths: 0, log: [] };
     S.players.push(p);
     this.push();
     this.emit('join', { id });
@@ -136,18 +137,21 @@ export class Engine {
     return true;
   }
 
-  // 새로고침 뒤 이어하기: 이미 죽은 사람 수만큼 라운드를 건너뛴다
+  out() { return this.S.players.filter((p) => !p.alive).length; }
+  totalDeaths() { return this.S.players.reduce((n, p) => n + p.deaths, 0); }
+
+  // 새로고침 뒤 이어하기: 지금까지의 죽음 횟수 다음 라운드부터
   resume() {
-    const dead = this.S.players.filter((p) => !p.alive).length;
     this.S.game = null;
-    this.matchLoop(dead + 1).catch((e) => { if (!(e instanceof Abort)) console.error(e); });
+    this.matchLoop(this.totalDeaths() + 1).catch((e) => { if (!(e instanceof Abort)) console.error(e); });
   }
 
   async matchLoop(from = 1) {
     const S = this.S;
     const run = ++this.run;
     this.emit('start');
-    for (let r = from; r <= S.elimCount; r++) {
+    // 라운드마다 정확히 한 번의 죽음. 탈락자가 정해진 수만큼 나오면 끝
+    for (let r = from; this.out() < S.elimCount; r++) {
       this.check(run);
       if (this.alive().length <= 1) break;
       S.phase = 'pick';
@@ -156,7 +160,7 @@ export class Engine {
       S.turn = null;
       S.caption = '';
       this.push();
-      this.emit('round', { round: r, total: S.elimCount, alive: this.alive().length });
+      this.emit('round', { round: r, total: S.elimCount, alive: this.alive().length, out: this.out(), lives: S.lives });
       await this.sleep(3000);
       const type = await this.choose(run);
       this.check(run);
@@ -165,10 +169,10 @@ export class Engine {
       S.phase = 'game';
       S.game = { type, gid: ++this.gid };
       this.push();
-      const before = this.alive().length;
+      const before = this.totalDeaths();
       await GAMES[type].run(this.ctx(run));
       this.check(run);
-      if (this.alive().length === before) {
+      if (this.totalDeaths() === before) {
         // 안전장치: 게임이 아무도 탈락시키지 않았다면 무작위 처형
         const v = this.alive()[rand(this.alive().length)];
         await this.kill(v.id, '시간 초과 처형', run);
@@ -218,13 +222,18 @@ export class Engine {
     this.check(run);
     const p = this.S.players.find((x) => x.id === id);
     if (!p || !p.alive) return;
-    p.alive = false;
+    p.deaths++;
+    p.log.push({ round: this.S.round, cause });
     p.cause = cause;
-    p.diedRound = this.S.round;
+    const out = p.deaths >= this.S.lives;
+    if (out) {
+      p.alive = false;
+      p.diedRound = this.S.round;
+    }
     this.S.turn = null;
     this.push();
-    this.emit('death', { id, cause });
-    await this.sleep(5200);
+    this.emit('death', { id, cause, deaths: p.deaths, lives: this.S.lives, out });
+    await this.sleep(out ? 5200 : 4600);
   }
 
   turn(actor, kind, { ms, options = null, def, validate = () => true } = {}, run) {
@@ -270,7 +279,7 @@ export class Engine {
     S.pick = null;
     S.caption = '';
     S.lastGame = null;
-    for (const p of S.players) { p.alive = true; p.cause = null; p.diedRound = 0; }
+    for (const p of S.players) { p.alive = true; p.cause = null; p.diedRound = 0; p.deaths = 0; p.log = []; }
     this.push();
     this.emit('reset');
   }
