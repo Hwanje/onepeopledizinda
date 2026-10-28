@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>지옥의 추첨</title>
+<meta name="description" content="한 명씩 지워나가는 당첨자 추첨. 마지막까지 남는 자가 당첨된다.">
+<meta name="theme-color" content="#070707">
+<meta property="og:title" content="지옥의 추첨">
+<meta property="og:description" content="초대장이 도착했습니다. 참가하시겠습니까?">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%23070707'/%3E%3Ccircle cx='32' cy='32' r='18' fill='none' stroke='%23c1121f' stroke-width='6'/%3E%3Cpath d='M18 46L46 18' stroke='%23c1121f' stroke-width='6'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Mono:wght@400;600&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header id="hud">
+  <a class="hud-logo" href="#/" data-text="지옥의 추첨">지옥의 추첨</a>
+  <div class="hud-right">
+    <span class="hud-room" id="hud-room"></span>
+    <span class="hud-net" id="hud-net"></span>
+    <button class="hud-btn" id="btn-mute" title="소리">SOUND ON</button>
+  </div>
+</header>
+<div id="app">
+
+
+  <!-- 첫 화면 -->
+  <section class="scr" id="scr-home">
+    <div class="home">
+      <p class="home-pre">— 참가 신청이 접수되었습니다 —</p>
+      <h1 class="title glitch" data-text="지옥의 추첨">지옥의 추첨</h1>
+      <p class="home-sub">한 명씩 지워나간다. 마지막까지 서 있는 자가 <em>당첨</em>이다.</p>
+      <div class="home-actions">
+        <button class="btn btn-blood btn-big" id="go-create">방을 연다</button>
+        <div class="home-join">
+          <input id="join-code" maxlength="5" placeholder="입장 코드" autocomplete="off" spellcheck="false">
+          <button class="btn btn-ghost" id="go-join">입장</button>
+        </div>
+      </div>
+      <ol class="home-rules">
+        <li><b>01</b> 방장이 방을 열고 링크를 뿌린다.</li>
+        <li><b>02</b> 매 라운드 게임 하나가 정해지고, 반드시 한 명이 죽는다.</li>
+        <li><b>03</b> 정해진 수만큼 죽으면 끝. 살아남은 자가 당첨.</li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- 방 만들기 -->
+  <section class="scr" id="scr-create">
+    <div class="panel narrow">
+      <h2 class="h2">방 개설</h2>
+      <label class="field">
+        <span>방 이름</span>
+        <input id="c-title" maxlength="24" value="지옥의 추첨">
+      </label>
+      <div id="c-settings"></div>
+      <label class="check">
+        <input type="checkbox" id="c-join" checked>
+        <span>방장도 게임에 참가한다</span>
+      </label>
+      <label class="field" id="c-name-wrap">
+        <span>방장 이름</span>
+        <input id="c-name" maxlength="12" placeholder="이름">
+      </label>
+      <div class="row-end">
+        <button class="btn btn-ghost" data-go="#/">돌아간다</button>
+        <button class="btn btn-blood" id="c-open">방을 연다</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 참가자 입장 -->
+  <section class="scr" id="scr-join">
+    <div class="panel narrow invite">
+      <p class="invite-k">초대장</p>
+      <h2 class="h2" id="j-title">지옥의 추첨</h2>
+      <p class="invite-code">입장 코드 <b id="j-code">-----</b></p>
+      <label class="field">
+        <span>당신의 이름</span>
+        <input id="j-name" maxlength="12" placeholder="이름" autocomplete="nickname">
+      </label>
+      <p class="muted small">참가하면 돌이킬 수 없습니다.</p>
+      <div class="row-end">
+        <button class="btn btn-ghost" data-go="#/">도망친다</button>
+        <button class="btn btn-blood" id="j-go">참가한다</button>
+      </div>
+      <p class="j-status" id="j-status"></p>
+    </div>
+  </section>
+
+  <!-- 대기실 -->
+  <section class="scr" id="scr-lobby">
+    <div class="lobby">
+      <div class="lobby-top">
+        <div>
+          <p class="eyebrow">대기실</p>
+          <h2 class="h2" id="l-title"></h2>
+          <p class="l-summary" id="l-summary"></p>
+        </div>
+        <div class="share" id="l-share">
+          <div class="share-qr" id="l-qr"></div>
+          <div class="share-body">
+            <p class="eyebrow">입장 코드</p>
+            <p class="share-code" id="l-code"></p>
+            <div class="share-link">
+              <input id="l-link" readonly>
+              <button class="btn btn-ghost btn-sm" id="l-copy">복사</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="lobby-grid">
+        <div class="lobby-main">
+          <div class="slots-head">
+            <h3 class="h3">참가자 <span id="l-count"></span></h3>
+            <div class="host-only add-manual">
+              <input id="l-manual" maxlength="12" placeholder="현장 참가자 이름">
+              <button class="btn btn-ghost btn-sm" id="l-add">추가</button>
+              <button class="btn btn-ghost btn-sm" id="l-fill">빈 자리 채우기</button>
+            </div>
+          </div>
+          <div class="slots" id="l-slots"></div>
+        </div>
+        <aside class="lobby-side">
+          <h3 class="h3">규칙</h3>
+          <div id="l-settings"></div>
+          <div class="host-only">
+            <p class="l-warn" id="l-warn"></p>
+            <button class="btn btn-blood btn-big wide" id="l-start">게임 시작</button>
+          </div>
+          <p class="guest-only muted l-wait">방장이 시작하기를 기다리는 중<span class="dots"></span></p>
+        </aside>
+      </div>
+    </div>
+  </section>
+
+  <!-- 게임 -->
+  <section class="scr" id="scr-play">
+    <div class="play">
+      <div class="play-top">
+        <div class="pt-round"><span class="eyebrow">ROUND</span><b id="p-round">0</b><i id="p-total">/0</i></div>
+        <div class="pt-caption" id="p-caption"></div>
+        <div class="pt-alive"><span class="eyebrow">생존</span><b id="p-alive">0</b></div>
+      </div>
+      <div class="play-game-head" id="p-gamehead"></div>
+      <div class="stage" id="p-stage"></div>
+      <div class="turnbar" id="p-turn"></div>
+      <div class="grave">
+        <span class="eyebrow">탈락</span>
+        <div class="grave-list" id="p-grave"></div>
+      </div>
+      <div class="host-only play-host">
+        <button class="btn btn-ghost btn-sm" id="p-abort">대기실로 (중단)</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 결과 -->
+  <section class="scr" id="scr-end">
+    <div class="end">
+      <p class="eyebrow">추첨 종료</p>
+      <h2 class="title-sm glitch" data-text="생존자">생존자</h2>
+      <p class="end-sub" id="e-sub"></p>
+      <div class="winners" id="e-winners"></div>
+      <h3 class="h3">탈락 기록</h3>
+      <ol class="dead-log" id="e-dead"></ol>
+      <div class="row-center host-only">
+        <button class="btn btn-blood" id="e-again">같은 참가자로 다시</button>
+        <button class="btn btn-ghost" data-go="#/">방 닫기</button>
+      </div>
+    </div>
+  </section>
+
+</div>
+<div class="toast" id="toast"></div>
+
+<!-- 효과 레이어 -->
+<canvas id="fx-blood"></canvas>
+<canvas id="fx-particles"></canvas>
+<div id="fx-flash"></div>
+<div id="banner"><div class="banner-in"><p class="banner-k" id="banner-k"></p><p class="banner-t glitch" id="banner-t" data-text=""></p><p class="banner-s" id="banner-s"></p></div></div>
+<div id="death">
+  <div class="death-in">
+    <p class="death-k" id="death-k">탈락</p>
+    <p class="death-num" id="death-num">000</p>
+    <p class="death-name" id="death-name"></p>
+    <p class="death-cause" id="death-cause"></p>
+  </div>
+</div>
+<div id="grain"></div>
+<div id="vignette"></div>
+<div id="gate"><button class="btn btn-blood btn-big" id="gate-btn">입장</button><p class="muted small">소리가 납니다. 이어폰을 권장합니다.</p></div>
+
+<script src="vendor/peerjs.min.js"></script>
+<script src="vendor/qrcode.js"></script>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
