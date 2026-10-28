@@ -1,6 +1,6 @@
 import { unlock, sfx, drone, heartLoop, isMuted, setMuted } from './audio.js';
 import * as fx from './fx.js';
-import { hostRoom, joinRoom, makeCode, hasPeer } from './net.js';
+import { hostRoom, joinRoom, makeCode, hasNet } from './net.js';
 import { Engine } from './engine.js';
 import { GAMES, GAME_IDS } from './games/index.js';
 import { esc, pad } from './games/common.js';
@@ -214,7 +214,8 @@ function startHost(cfg, saved = null) {
   const connect = (code) => {
     A.net = hostRoom(code, {
       onReady: () => { A.peerOk = true; renderNet(); },
-      onJoin: () => {},
+      // 모르는 접속(방장 새로고침 뒤 등)에는 신원을 다시 묻는다
+      onJoin: (pid) => { if (!peers.has(pid)) A.net.send(pid, { t: 'who' }); },
       onData: (pid, m) => {
         if (!m || typeof m !== 'object') return;
         if (m.t === 'hello') {
@@ -236,19 +237,7 @@ function startHost(cfg, saved = null) {
         peers.delete(pid);
         if (id && !peerOf(id)) E.setOnline(id, false);
       },
-      onError: (type, wasReady) => {
-        if (type === 'unavailable-id' && !wasReady && E.S.phase === 'lobby' && !saved) {
-          A.net.destroy();
-          const nc = makeCode();
-          E.S.code = nc;
-          A.code = nc;
-          history.replaceState(null, '', `#/h/${nc}`);
-          connect(nc);
-          E.push();
-          return;
-        }
-        if (!wasReady) { A.peerOk = false; renderNet(); }
-      },
+      onError: () => { A.peerOk = false; renderNet(); },
     });
     if (!A.net) { A.peerOk = false; renderNet(); }
   };
@@ -272,15 +261,25 @@ function startGuest(code, name) {
   store.set('hp_name', name);
   store.sset('hp_guest_' + code, 1);
   $('#j-status').textContent = '연결 중...';
+  const hello = () => A.net && A.net.send({ t: 'hello', cid: A.me, name });
+  let welcomed = false;
+  let tries = 0;
+  clearInterval(A.helloTimer);
+  A.helloTimer = setInterval(() => {
+    if (welcomed || !A.net) return;
+    hello();
+    if (++tries === 4) $('#j-status').textContent = '방을 찾는 중입니다. 방장 화면이 열려 있는지, 코드가 맞는지 확인하세요...';
+  }, 2500);
   A.net = joinRoom(code, {
-    onOpen: () => {
-      A.peerOk = true;
-      renderNet();
-      A.net.send({ t: 'hello', cid: A.me, name });
+    onOpen: (why) => {
+      if (why === 'host') { A.peerOk = true; renderNet(); }
+      hello();
     },
     onData: (m) => {
       if (!m || typeof m !== 'object') return;
+      if (m.t === 'who') { hello(); return; }
       if (m.t === 'welcome') {
+        welcomed = true;
         A.joined = m.joined;
         A.lastSeq = m.seq;
         if (!m.joined) toast(m.started ? '이미 시작된 방입니다. 관전합니다.' : m.full ? '정원이 찼습니다. 관전합니다.' : '관전 모드');
@@ -298,9 +297,10 @@ function startGuest(code, name) {
       }
     },
     onClose: () => { A.peerOk = false; renderNet(); toast('연결이 끊겼습니다. 다시 연결하는 중...'); },
-    onError: (type) => {
-      if (type === 'peer-unavailable') $('#j-status').textContent = '방을 찾을 수 없습니다. 방장이 방을 열어두었는지 확인하세요. 재시도 중...';
-      else { $('#j-status').textContent = '연결 오류: ' + type; A.peerOk = false; renderNet(); }
+    onError: () => {
+      $('#j-status').textContent = '중계 서버에 연결하지 못했습니다. 네트워크를 확인하세요. 재시도 중...';
+      A.peerOk = false;
+      renderNet();
     },
   });
   if (!A.net) $('#j-status').textContent = '통신 라이브러리를 불러오지 못했습니다.';
@@ -671,6 +671,7 @@ function onEvent(ev) {
 
 // ---------- 라우팅 ----------
 function teardown() {
+  clearInterval(A.helloTimer);
   if (A.net) { A.net.destroy(); A.net = null; }
   if (A.view) { A.view.destroy(); A.view = null; }
   A.role = null; A.S = null; A.engine = null; A.viewGid = null; A.turnId = null; A.peerOk = null;
@@ -830,4 +831,4 @@ grain();
 bind();
 addEventListener('hashchange', route);
 route();
-if (!hasPeer()) toast('통신 라이브러리를 불러오지 못했습니다. 이 화면에서만 진행할 수 있습니다.', 5000);
+if (!hasNet()) toast('통신 라이브러리를 불러오지 못했습니다. 이 화면에서만 진행할 수 있습니다.', 5000);
